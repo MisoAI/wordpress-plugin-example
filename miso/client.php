@@ -67,6 +67,7 @@ class Products {
     }
 
     public function delete($ids) {
+        // TODO: take both string and array
         return $this->helpers->post('products/_delete', [
             'data' => [
                 'product_ids' => $ids,

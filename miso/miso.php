@@ -17,4 +17,5 @@ global $miso;
 $miso = new \Miso\Client($_ENV['MISO_API_KEY']);
 
 require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/updates.php';
 require_once __DIR__ . '/wp-cli.php';
