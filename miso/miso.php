@@ -18,5 +18,5 @@ $miso = new \Miso\Client([
 ]);
 
 require_once __DIR__ . '/functions.php';
-require_once __DIR__ . '/updates.php';
+require_once __DIR__ . '/actions.php';
 require_once __DIR__ . '/wp-cli.php';
