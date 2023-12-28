@@ -7,8 +7,8 @@ class Client {
     protected $helpers;
     public $products;
 
-    public function __construct($apiKey) {
-        $helpers = $this->helpers = new Helpers($apiKey);
+    public function __construct($args) {
+        $helpers = $this->helpers = new Helpers($args);
         $this->products = new Products($helpers);
     }
 
@@ -16,12 +16,17 @@ class Client {
 
 class Helpers {
 
+    protected $args;
     protected $http;
 
-    public function __construct($apiKey) {
+    public function __construct($args = []) {
+        if (!isset($args['api_key'])) {
+            throw new \Exception('api_key is required');
+        }
+        $this->args = $args;
         $this->http = new \GuzzleHttp\Client([
             'headers' => [
-                'X-API-KEY' => $apiKey,
+                'X-API-KEY' => $args['api_key'],
             ],
             'base_uri' => 'https://api.askmiso.com/v1/',
         ]);
@@ -36,8 +41,23 @@ class Helpers {
     }
 
     protected function request($method, $path, $body = null) {
-        // TODO: retry mechanism
-        // TODO: error handling
+        $maxRetry = $this->args['max_retry'] ?? 3;
+        for ($i = 0; $i < $maxRetry; $i++) {
+            try {
+                return $this->requestOnce($method, $path, $body);
+            } catch (\GuzzleHttp\Exception\ClientException $e) {
+                // don't retry on 4xx
+                throw $e;
+            } catch (\Exception $e) {
+                if ($i === $maxRetry - 1) {
+                    throw $e;
+                }
+            }
+        }
+        throw new \Exception('Unknown error');
+    }
+
+    protected function requestOnce($method, $path, $body = null) {
         $options = [];
         if ($body) {
             $options['json'] = $body;
@@ -57,7 +77,7 @@ class Products {
         $this->helpers = $helpers;
     }
 
-    public function ids() {
+    public function ids($args = []) {
         // TODO: catch 404
         return $this->helpers->get('products/_ids')['ids'];
     }
