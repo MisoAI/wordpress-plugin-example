@@ -47,7 +47,12 @@ class Helpers {
                 return $this->requestOnce($method, $path, $body);
             } catch (\GuzzleHttp\Exception\ClientException $e) {
                 // don't retry on 4xx
-                throw $e;
+                if ($e->getResponse()->getStatusCode() === 422) {
+                    $body = json_decode($e->getResponse()->getBody()->getContents(), true);
+                    throw new DataFormatException($body['message'], $body['data']);
+                } else {
+                    throw $e;
+                }
             } catch (\Exception $e) {
                 if ($i === $maxRetry - 1) {
                     throw $e;
@@ -93,6 +98,27 @@ class Products {
                 'product_ids' => $ids,
             ],
         ]);
+    }
+
+}
+
+class DataFormatException extends \Exception {
+
+    protected $message;
+    protected $data;
+
+    public function __construct(string $message, array $data) {
+        $this->message = $message;
+        $this->data = $data;
+        parent::__construct('Data format error: ' . $message . implode(' ', $data));
+    }
+
+    public function getData() {
+        return $this->data;
+    }
+
+    public function __toString() {
+        return __CLASS__ . ': ' . $this->message . implode(' ', $this->data);
     }
 
 }

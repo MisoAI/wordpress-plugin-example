@@ -69,6 +69,27 @@ class Miso_Command {
 
         WP_CLI::success('Full sync complete. Uploaded ' . $uploaded . ' records. Deleted ' . count($idsToDelete) . ' records.');
     }
+
+    public function debug($args, $assoc_args) {
+
+        $id = $assoc_args['id'];
+        $type = $assoc_args['type'];
+        $query = $id ?
+            array('p' => intval($id), 'posts_per_page' => 1) :
+            array('post_type' => $type ?? 'post', 'posts_per_page' => 1, 'post_status' => 'publish');
+        WP_CLI::line("\n[Query]");
+        var_dump($query);
+
+        $posts = new WP_Query($query);
+        $post = $posts->posts[0];
+        WP_CLI::line("\n[Post]");
+        var_dump($post);
+
+        $record = (array) apply_filters('post_to_record', $post);
+        WP_CLI::line("\n[Record]");
+        var_dump($record);
+    }
+
 }
 
 WP_CLI::add_command('miso', 'Miso_Command');
