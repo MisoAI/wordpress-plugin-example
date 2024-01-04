@@ -8,6 +8,7 @@
 
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/client.php';
+require_once __DIR__ . '/operations.php';
 
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 $dotenv->safeLoad();
@@ -20,3 +21,4 @@ $miso = new \Miso\Client([
 require_once __DIR__ . '/filters.php';
 require_once __DIR__ . '/actions.php';
 require_once __DIR__ . '/wp-cli.php';
+require_once __DIR__ . '/admin.php';
