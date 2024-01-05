@@ -21,10 +21,8 @@ function miso_admin_menu() {
     );
     add_settings_section(
         'miso_settings',
-        'Miso Settings',
-        function () {
-            echo '<p>Settings for Miso Integration</p>';
-        },
+        '',
+        function () {},
         'miso',
     );
     add_settings_field(
@@ -33,7 +31,7 @@ function miso_admin_menu() {
         function () {
             $options = get_option('miso_settings', []);
             $api_key = array_key_exists('api_key', $options) ? $options['api_key'] : '';
-            echo '<input type="text" name="miso_settings[api_key]" value="' . $api_key . '" />';
+            echo '<input type="text" name="miso_settings[api_key]" value="' . $api_key . '" style="min-width: 400px;" />';
         },
         'miso',
         'miso_settings',
