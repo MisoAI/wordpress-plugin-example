@@ -6,6 +6,38 @@ add_action('admin_menu', 'miso_admin_menu');
 add_action('wp_ajax_miso_send_form', 'miso_send_form');
 
 function miso_admin_menu() {
+    unregister_setting('miso', 'miso_settings');
+    register_setting(
+        'miso',
+        'miso_settings',
+        [
+            'type' => 'array',
+            'description' => 'Miso Settings',
+            'sanitize_callback' => function ($value) {
+                return $value;
+            },
+            'show_in_rest' => false,
+        ],
+    );
+    add_settings_section(
+        'miso_settings',
+        'Miso Settings',
+        function () {
+            echo '<p>Settings for Miso Integration</p>';
+        },
+        'miso',
+    );
+    add_settings_field(
+        'api_key',
+        'API Key',
+        function () {
+            $options = get_option('miso_settings', []);
+            $api_key = array_key_exists('api_key', $options) ? $options['api_key'] : '';
+            echo '<input type="text" name="miso_settings[api_key]" value="' . $api_key . '" />';
+        },
+        'miso',
+        'miso_settings',
+    );
     add_menu_page(
         'Miso',
         'Miso',
@@ -19,6 +51,14 @@ function miso_admin_menu() {
 function miso_admin_page() {
     ?>
     <div class="wrap">
+        <h1>Settings</h1>
+        <form method="post" action="options.php">
+            <?php
+                settings_fields('miso');
+                do_settings_sections('miso');
+                submit_button();
+            ?>
+        </form>
         <h1>Operations</h1>
         <form name="sync-posts">
             <div>

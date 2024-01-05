@@ -2,14 +2,22 @@
 
 namespace Miso;
 
+use Miso\Client;
+
 class Operations {
 
     public static function sync_posts($args, $ctx = []) {
 
+        $api_key = get_option('miso_settings')['api_key'] ?? null;
+        if (!$api_key) {
+            throw new \Exception('API key is required');
+        }
+
+        $miso = new Client([
+            'api_key' => $api_key,
+        ]);
+
         $logger = $ctx['logger'] ?? new NopLogger();
-
-        global $miso;
-
         $logger->log('Starting full sync...');
 
         $page = 1;
