@@ -12,28 +12,47 @@ class DataBase {
         self::drop_task_table();
     }
 
-    public static function current_task() {
-        global $wpdb;
-        $table_name = self::table_name('task');
-        $sql = "SELECT * FROM {$table_name} WHERE status = 'running' OR status = 'started' ORDER BY created_at DESC LIMIT 1";
-        $task = $wpdb->get_row($sql, ARRAY_A);
-        return $task;
-    }
-
     public static function recent_tasks() {
         global $wpdb;
         $table_name = self::table_name('task');
         $sql = "SELECT * FROM {$table_name} ORDER BY created_at DESC LIMIT 10";
         $tasks = $wpdb->get_results($sql, ARRAY_A);
-        return $tasks;
+        return array_map(function($task) {
+            $task['args'] = json_decode($task['args'], true);
+            $task['data'] = json_decode($task['data'], true);
+            return $task;
+        }, $tasks);
+    }
+
+    public static function create_task($task) {
+        global $wpdb;
+        $table_name = self::table_name('task');
+        $current_time = current_time('mysql', 1);
+        $wpdb->insert($table_name, array_merge($task, [
+            'created_at' => $current_time,
+            'modified_at' => $current_time,
+            'args' => json_encode($task['args'] ?? []),
+            'data' => json_encode($task['data'] ?? []),
+        ]));
+        $task['id'] = $wpdb->insert_id;
+        return $task;
     }
 
     public static function update_task($task) {
         global $wpdb;
         $table_name = self::table_name('task');
-        $wpdb->replace($table_name, array_merge($task, [
-            'modified_at' => current_time('mysql'),
-        ]));
+        $current_time = current_time('mysql', 1);
+        $wpdb->update(
+            $table_name, 
+            [
+                'status' => $task['status'],
+                'modified_at' => $current_time,
+                'data' => json_encode($task['data'] ?? []),
+            ],
+            [
+                'id' => $task['id'],
+            ],
+        );
     }
 
     protected static function create_task_table() {
@@ -42,14 +61,15 @@ class DataBase {
         $table_name = self::table_name('task');
         $sql = "
             CREATE TABLE IF NOT EXISTS {$table_name} (
-                id varchar(255) NOT NULL,
+                id int NOT NULL AUTO_INCREMENT,
                 type varchar(255) NOT NULL,
-                args text NOT NULL,
                 status varchar(255) NOT NULL,
-                data text,
                 created_at timestamp DEFAULT CURRENT_TIMESTAMP,
                 modified_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id)
+                args json,
+                data json,
+                PRIMARY KEY (id),
+                INDEX (created_at)
             ) $charset_collate;
         ";
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';

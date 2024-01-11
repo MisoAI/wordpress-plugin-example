@@ -29,5 +29,6 @@ require_once __DIR__ . '/admin.php';
 register_activation_hook(__FILE__, function() {
     Miso\DataBase::install();
 });
-
-// TODO: uninstall
+register_deactivation_hook(__FILE__, function() {
+    Miso\DataBase::uninstall();
+});

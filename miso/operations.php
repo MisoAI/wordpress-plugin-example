@@ -2,14 +2,9 @@
 
 namespace Miso;
 
-use Miso\Utils;
 use Miso\DataBase;
 
 class Operations {
-
-    public static function current_task() {
-        return DataBase::current_task();
-    }
 
     public static function recent_tasks() {
         return DataBase::recent_tasks();
@@ -19,37 +14,21 @@ class Operations {
 
         // TODO: bounce if another task is running
 
-        $task_id = Utils::uuidv4();
-
-        as_enqueue_async_action('miso_sync_posts_hook', [[
-            'task_id' => $task_id,
-        ]]);
-
-        $task = [
-            'id' => $task_id,
-            'type' => 'sync_posts',
-            'args' => $args,
-            'data' => [],
-            'status' => 'queued',
-        ];
-
-        self::update_task_progress($task);
+        $task = self::create_task($args, 'queued');
+        as_enqueue_async_action('miso_sync_posts_hook', [$task]);
+        spawn_cron();
     }
 
     public static function sync_posts($args) {
+        $task = self::create_task($args, 'started');
+        self::run_sync_posts($task);
+    }
+
+    public static function run_sync_posts($task) {
 
         // TODO: bounce if another task is running
 
-        $task = [
-            'id' => $args['task_id'] ?? Utils::uuidv4(),
-            'type' => 'sync_posts',
-            'args' => $args,
-            'data' => [],
-            'status' => 'started',
-        ];
-
-        self::update_task_progress($task);
-
+        $args = $task['args'] ?? [];
         $query = $args['query'] ?? [
             'post_type' => 'post',
             'post_status' => 'publish',
@@ -64,7 +43,7 @@ class Operations {
             $task['data']['total'] = $total;
             $task['data']['uploaded'] = 0;
 
-            self::update_task_progress($task);
+            self::update_task($task);
 
             $page = 1;
             $wpIds = [];
@@ -92,7 +71,7 @@ class Operations {
                     if (count($records) >= 20) {
                         $miso->products->upload($records);
                         $task['data']['uploaded'] += count($records);
-                        self::update_task_progress($task);
+                        self::update_task($task);
                         $records = [];
                     }
                 }
@@ -104,12 +83,12 @@ class Operations {
             if (count($records) > 0) {
                 $miso->products->upload($records);
                 $task['data']['uploaded'] += count($records);
-                self::update_task_progress($task);
+                self::update_task($task);
             }
 
             // compare ids and delete records that no longer exist
             $task['data']['phase'] = 'delete';
-            self::update_task_progress($task);
+            self::update_task($task);
 
             $misoIds = $miso->products->ids();
             $idsToDelete = array_diff($misoIds, $wpIds);
@@ -121,21 +100,31 @@ class Operations {
             $task['data']['deleted'] = $deleted;
             $task['data']['phase'] = 'done';
             $task['status'] = 'done';
-            self::update_task_progress($task);
+            self::update_task($task);
 
         } catch (\Exception $e) {
             $task['status'] = 'failed';
             $task['data']['error'] = $e->getMessage();
-            self::update_task_progress($task);
+            self::update_task($task);
             throw $e;
         }
     }
 
-    protected static function update_task_progress($task) {
+    protected static function create_task($args, $status) {
+        $task = DataBase::create_task([
+            'type' => 'sync_posts',
+            'args' => $args,
+            'status' => $status,
+        ]);
+        do_action('miso_task_progress', $task);
+        return $task;
+    }
+
+    protected static function update_task($task) {
         DataBase::update_task($task);
         do_action('miso_task_progress', $task);
     }
 
 }
 
-add_action('miso_sync_posts_hook', [__NAMESPACE__ . '\Operations', 'sync_posts'], 10, 1);
+add_action('miso_sync_posts_hook', [__NAMESPACE__ . '\Operations', 'run_sync_posts'], 10, 1);

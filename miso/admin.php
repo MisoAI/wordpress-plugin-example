@@ -67,13 +67,22 @@ function miso_admin_page() {
         <table id="recent-tasks" class="widefat fixed" cellspacing="0">
             <thead>
                 <th class="manage-column column-columnname" scope="col">Status</th>
+                <th class="manage-column column-columnname" scope="col">Uploaded</th>
+                <th class="manage-column column-columnname" scope="col">Deleted</th>
                 <th class="manage-column column-columnname" scope="col">Created At</th>
                 <th class="manage-column column-columnname" scope="col">Updated At</th>
             </thead>
             <tbody>
-                <?php foreach ($recent_tasks as $task): ?>
+                <?php foreach ($recent_tasks as $task):
+                    $data = $task['data'] ?? [];
+                    $uploaded = $data['uploaded'] ?? 0;
+                    $total = $data['total'] ?? 0;
+                    $deleted = $data['deleted'] ?? 0;
+                ?>
                     <tr data-task-id="<?php echo $task['id']; ?>">
                         <td class="column-columnname"><?php echo $task['status'] ?? ''; ?></td>
+                        <td class="column-columnname"><?php echo $uploaded; ?> / <?php echo $total; ?></td>
+                        <td class="column-columnname"><?php echo $deleted; ?></td>
                         <td class="column-columnname"><?php echo $task['created_at'] ?? ''; ?></td>
                         <td class="column-columnname"><?php echo $task['modified_at'] ?? ''; ?></td>
                     </tr>
@@ -86,13 +95,16 @@ function miso_admin_page() {
         const ajax_nonce = '<?php echo wp_create_nonce( "secure_nonce_name" ); ?>';
         function updateProgress({ miso_recent_tasks }) {
             for (const task of miso_recent_tasks) {
+                const { uploaded = 0, total = 0, deleted = 0 } = task.data || {};
                 const $tr = jQuery('#recent-tasks tr[data-task-id="' + task.id + '"]');
                 if ($tr.length === 0) {
-                    jQuery('#recent-tasks tbody').prepend(`<tr data-task-id="${task.id}"><td class="column-columnname">${task.status}</td><td class="column-columnname">${task.created_at}</td><td class="column-columnname">${task.modified_at}</td></tr>`);
+                    jQuery('#recent-tasks tbody').prepend(`<tr data-task-id="${task.id}"><td class="column-columnname">${task.status}</td><td class="column-columnname">${uploaded} / ${total}</td><td class="column-columnname">${deleted}</td><td class="column-columnname">${task.status}</td><td class="column-columnname">${task.created_at}</td><td class="column-columnname">${task.modified_at}</td></tr>`);
                 } else {
                     $tr.find('td:nth-child(1)').text(task.status);
-                    $tr.find('td:nth-child(2)').text(task.created_at);
-                    $tr.find('td:nth-child(3)').text(task.modified_at);
+                    $tr.find('td:nth-child(2)').text(`${uploaded}/${total}`);
+                    $tr.find('td:nth-child(3)').text(deleted);
+                    $tr.find('td:nth-child(4)').text(task.created_at);
+                    $tr.find('td:nth-child(5)').text(task.modified_at);
                 }
             }
         }
@@ -111,6 +123,8 @@ function miso_admin_page() {
                     success: (response) => {
                         $button.prop('disabled', false);
                         wp.heartbeat.connectNow();
+                        const intervalId = setInterval(() => wp.heartbeat.connectNow(), 10000);
+                        setTimeout(() => clearInterval(intervalId), 120000);
                     },
                     error: (response) => {
                         $button.prop('disabled', false);
@@ -122,7 +136,6 @@ function miso_admin_page() {
             });
             $(document).on('heartbeat-tick', (event, data) => {
                 updateProgress(data);
-                //console.log(event, data);
             });
         });
     </script>
@@ -139,9 +152,7 @@ function miso_send_form() {
     }
     switch ($operation) {
         case 'sync-posts':
-            miso_sync_posts([
-                'task_id' => Utils::uuidv4(),
-            ]);
+            miso_sync_posts($_POST);
             break;
         default:
             wp_send_json_error('Unrecognized operation: ' . $operation, 400);
@@ -151,10 +162,6 @@ function miso_send_form() {
 function miso_sync_posts(array $args) {
     Operations::enqueue_sync_posts([]);
     wp_send_json_success();
-}
-
-function miso_sync_posts_action($args = []) {
-    Operations::sync_posts($args);
 }
 
 function miso_heartbeat_send($response, $screen_id) {
