@@ -6,13 +6,13 @@
  * @package      Miso_Integration
  */
 
-require_once __DIR__ . '/vendor/autoload.php';
+ require_once __DIR__ . '/vendor/woocommerce/action-scheduler/action-scheduler.php';
+ require_once __DIR__ . '/vendor/autoload.php';
 
-// Miso client for API calls
+require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/client.php';
-
-// operations
 require_once __DIR__ . '/operations.php';
+require_once __DIR__ . '/database.php';
 
 // filters: including function that transform WP post to Miso record
 require_once __DIR__ . '/filters.php';
@@ -25,3 +25,9 @@ require_once __DIR__ . '/wp-cli.php';
 
 // adds admin pages
 require_once __DIR__ . '/admin.php';
+
+register_activation_hook(__FILE__, function() {
+    Miso\DataBase::install();
+});
+
+// TODO: uninstall

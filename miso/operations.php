@@ -2,87 +2,140 @@
 
 namespace Miso;
 
-use Miso\Client;
+use Miso\Utils;
+use Miso\DataBase;
 
 class Operations {
 
-    public static function sync_posts($args, $ctx = []) {
+    public static function current_task() {
+        return DataBase::current_task();
+    }
 
-        $api_key = get_option('miso_settings')['api_key'] ?? null;
-        if (!$api_key) {
-            throw new \Exception('API key is required');
-        }
+    public static function recent_tasks() {
+        return DataBase::recent_tasks();
+    }
 
-        $miso = new Client([
-            'api_key' => $api_key,
-        ]);
+    public static function enqueue_sync_posts($args = []) {
 
-        $logger = $ctx['logger'] ?? new NopLogger();
-        $logger->log('Starting full sync...');
+        // TODO: bounce if another task is running
 
-        $page = 1;
-        $uploaded = 0;
-        $wpIds = [];
-        $records = [];
+        $task_id = Utils::uuidv4();
 
-        do {
-            // get paged posts
-            $posts = new \WP_Query(array(
-                'post_type' => 'post',
-                'posts_per_page' => 100,
-                'paged' => $page,
-                'post_status' => 'publish',
-            ));
-            if (!$posts->have_posts()) {
-                break;
-            }
+        as_enqueue_async_action('miso_sync_posts_hook', [[
+            'task_id' => $task_id,
+        ]]);
 
-            // transform posts to Miso records
-            foreach ($posts->posts as $post) {
-                $record = (array) apply_filters('post_to_record', $post);
-                $records[] = $record;
+        $task = [
+            'id' => $task_id,
+            'type' => 'sync_posts',
+            'args' => $args,
+            'data' => [],
+            'status' => 'queued',
+        ];
 
-                // keep track of post IDs
-                $wpIds[] = $record['product_id'];
+        self::update_task_progress($task);
+    }
 
-                // send to Miso API
-                if (count($records) >= 20) {
-                    $miso->products->upload($records);
-                    $uploaded += count($records);
-                    $records = [];
+    public static function sync_posts($args) {
+
+        // TODO: bounce if another task is running
+
+        $task = [
+            'id' => $args['task_id'] ?? Utils::uuidv4(),
+            'type' => 'sync_posts',
+            'args' => $args,
+            'data' => [],
+            'status' => 'started',
+        ];
+
+        self::update_task_progress($task);
+
+        $query = $args['query'] ?? [
+            'post_type' => 'post',
+            'post_status' => 'publish',
+        ];
+
+        try {
+            $miso = miso_create_client();
+
+            $total = (new \WP_Query($query))->found_posts;
+            $task['status'] = 'running';
+            $task['data']['phase'] = 'upload';
+            $task['data']['total'] = $total;
+            $task['data']['uploaded'] = 0;
+
+            self::update_task_progress($task);
+
+            $page = 1;
+            $wpIds = [];
+            $records = [];
+
+            do {
+                // get paged posts
+                $posts = new \WP_Query(array_merge($query, [
+                    'posts_per_page' => 100,
+                    'paged' => $page,
+                ]));
+                if (!$posts->have_posts()) {
+                    break;
                 }
+
+                // transform posts to Miso records
+                foreach ($posts->posts as $post) {
+                    $record = (array) apply_filters('post_to_record', $post);
+                    $records[] = $record;
+
+                    // keep track of post IDs
+                    $wpIds[] = $record['product_id'];
+
+                    // send to Miso API
+                    if (count($records) >= 20) {
+                        $miso->products->upload($records);
+                        $task['data']['uploaded'] += count($records);
+                        self::update_task_progress($task);
+                        $records = [];
+                    }
+                }
+
+                $page++;
+            } while (true);
+
+            // send to Miso API
+            if (count($records) > 0) {
+                $miso->products->upload($records);
+                $task['data']['uploaded'] += count($records);
+                self::update_task_progress($task);
             }
 
-            $page++;
+            // compare ids and delete records that no longer exist
+            $task['data']['phase'] = 'delete';
+            self::update_task_progress($task);
 
-        } while (true);
+            $misoIds = $miso->products->ids();
+            $idsToDelete = array_diff($misoIds, $wpIds);
+            $deleted = count($idsToDelete);
+            if ($deleted > 0) {
+                $miso->products->delete($idsToDelete);
+            }
 
-        // send to Miso API
-        if (count($records) > 0) {
-            $miso->products->upload($records);
-            $uploaded += count($records);
+            $task['data']['deleted'] = $deleted;
+            $task['data']['phase'] = 'done';
+            $task['status'] = 'done';
+            self::update_task_progress($task);
+
+        } catch (\Exception $e) {
+            $task['status'] = 'failed';
+            $task['data']['error'] = $e->getMessage();
+            self::update_task_progress($task);
+            throw $e;
         }
+    }
 
-        // compare ids and delete records that no longer exist
-        $misoIds = $miso->products->ids();
-        $idsToDelete = array_diff($misoIds, $wpIds);
-        if (count($idsToDelete) > 0) {
-            $miso->products->delete($idsToDelete);
-        }
-
-        $logger->success('Full sync complete. Uploaded ' . $uploaded . ' records. Deleted ' . count($idsToDelete) . ' records.');
+    protected static function update_task_progress($task) {
+        DataBase::update_task($task);
+        do_action('miso_task_progress', $task);
     }
 
 }
 
-class NopLogger {
-
-    public function success($message) {}
-
-    public function error($message) {}
-
-    public function log($message) {}
-
-    public function debug($message) {}
-
-}
+add_action('miso_sync_posts_hook', [__NAMESPACE__ . '\Operations', 'sync_posts'], 10, 1);
