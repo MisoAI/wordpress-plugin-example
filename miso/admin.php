@@ -1,6 +1,5 @@
 <?php
 
-use Miso\Utils;
 use Miso\Operations;
 
 function miso_admin_menu() {
@@ -171,9 +170,6 @@ function miso_heartbeat_send($response, $screen_id) {
     $response['miso_recent_tasks'] = Operations::recent_tasks();
     return $response;
 }
-
-// wp.heartbeat.connectNow();
-// wp.heartbeat.interval(5);
 
 add_action('admin_menu', 'miso_admin_menu');
 add_action('wp_ajax_miso_send_form', 'miso_send_form');

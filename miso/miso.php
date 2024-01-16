@@ -9,10 +9,9 @@
  require_once __DIR__ . '/vendor/woocommerce/action-scheduler/action-scheduler.php';
  require_once __DIR__ . '/vendor/autoload.php';
 
-require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/client.php';
-require_once __DIR__ . '/operations.php';
 require_once __DIR__ . '/database.php';
+require_once __DIR__ . '/operations.php';
 
 // filters: including function that transform WP post to Miso record
 require_once __DIR__ . '/filters.php';

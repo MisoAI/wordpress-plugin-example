@@ -1,7 +1,5 @@
 <?php
 
-use Miso\miso_create_client;
-
 // cascade save_post
 function miso_update_post($id, WP_Post $post, $update) {
     if (wp_is_post_revision($id) || wp_is_post_autosave($id)) {
